@@ -46,7 +46,7 @@
   var Ctor = function(){};
 
   // Create a safe reference to the Underscore object for use below.
-  // 创建变量安茜引用Underscore对象
+  // 创建变量引用Underscore对象
   var _ = function(obj) {
     if (obj instanceof _) return obj;
     if (!(this instanceof _)) return new _(obj);
@@ -58,6 +58,7 @@
   // the browser, add `_` as a global object.
   // (`nodeType` is checked to ensure that `module`
   // and `exports` are not HTML elements.)
+  // nodejs与浏览器中导出underscore
   if (typeof exports != 'undefined' && !exports.nodeType) {
     if (typeof module != 'undefined' && !module.nodeType && module.exports) {
       exports = module.exports = _;
@@ -73,14 +74,20 @@
   // Internal function that returns an efficient (for current engines) version
   // of the passed-in callback, to be repeatedly applied in other Underscore
   // functions.
+  // 与ES5的bind方法一样，argCount来决定返回不同数量参数的函数
   var optimizeCb = function(func, context, argCount) {
-    if (context === void 0) return func;
+    // context === undefined
+    if (context === void 0) {
+      return func;
+    }
+    
     switch (argCount) {
       case 1: return function(value) {
         return func.call(context, value);
       };
       // The 2-parameter case has been omitted only because no current consumers
       // made use of it.
+      // 略过case 2 因为两个参数没有应用场景
       case null:
       case 3: return function(value, index, collection) {
         return func.call(context, value, index, collection);
@@ -89,6 +96,7 @@
         return func.call(context, accumulator, value, index, collection);
       };
     }
+
     return function() {
       return func.apply(context, arguments);
     };
@@ -99,6 +107,7 @@
   // An internal function to generate callbacks that can be applied to each
   // element in a collection, returning the desired result — either `identity`,
   // an arbitrary callback, a property matcher, or a property accessor.
+  // 根据value数据类型调用不同的_.方法
   var cb = function(value, context, argCount) {
     if (_.iteratee !== builtinIteratee) return _.iteratee(value, context);
     if (value == null) return _.identity;
@@ -110,18 +119,21 @@
   // External wrapper for our callback generator. Users may customize
   // `_.iteratee` if they want additional predicate/iteratee shorthand styles.
   // This abstraction hides the internal-only argCount argument.
+  // _.iteratee对cb函数的封装，忽略了第三个参数
   _.iteratee = builtinIteratee = function(value, context) {
     return cb(value, context, Infinity);
   };
 
   // Similar to ES6's rest param (http://ariya.ofilabs.com/2013/03/es6-and-rest-parameter.html)
   // This accumulates the arguments passed into an array, after a given index.
+  // 内部函数的参数超过startindex时就将多出的参数合并为一个数组，与之前的参数一起作为参数传入func
   var restArgs = function(func, startIndex) {
     startIndex = startIndex == null ? func.length - 1 : +startIndex;
     return function() {
       var length = Math.max(arguments.length - startIndex, 0),
           rest = Array(length),
           index = 0;
+      // 从类数组对象转换为数组对象
       for (; index < length; index++) {
         rest[index] = arguments[index + startIndex];
       }
@@ -130,6 +142,7 @@
         case 1: return func.call(this, arguments[0], rest);
         case 2: return func.call(this, arguments[0], arguments[1], rest);
       }
+
       var args = Array(startIndex + 1);
       for (index = 0; index < startIndex; index++) {
         args[index] = arguments[index];
@@ -140,21 +153,32 @@
   };
 
   // An internal function for creating a new object that inherits from another.
+  // 模拟ES5的对象方法Object.create
   var baseCreate = function(prototype) {
-    if (!_.isObject(prototype)) return {};
-    if (nativeCreate) return nativeCreate(prototype);
+    if (!_.isObject(prototype)) {
+      return {};
+    }
+
+    // nativeCreate为Object.create的别名
+    if (nativeCreate) {
+      return nativeCreate(prototype);
+    }
+
+    // Ctor是function(){}
     Ctor.prototype = prototype;
     var result = new Ctor;
     Ctor.prototype = null;
     return result;
   };
 
+  // 函数柯里化，浅获取obj属性为key的值
   var shallowProperty = function(key) {
     return function(obj) {
       return obj == null ? void 0 : obj[key];
     };
   };
 
+  // 深获取obj中属性为key的值，path为属性路径 如：obj = {a:{x:1,y:2,z:3}}; path = ['a', 'x'];
   var deepGet = function(obj, path) {
     var length = path.length;
     for (var i = 0; i < length; i++) {
@@ -168,6 +192,7 @@
   // should be iterated as an array or as an object.
   // Related: http://people.mozilla.org/~jorendorff/es6-draft.html#sec-tolength
   // Avoids a very nasty iOS 8 JIT bug on ARM-64. #2094
+  // 判断对象是否有length属性
   var MAX_ARRAY_INDEX = Math.pow(2, 53) - 1;
   var getLength = shallowProperty('length');
   var isArrayLike = function(collection) {
@@ -175,12 +200,13 @@
     return typeof length == 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
   };
 
-  // Collection Functions
+  // Collection Functions 集合方法
   // --------------------
 
   // The cornerstone, an `each` implementation, aka `forEach`.
   // Handles raw objects in addition to array-likes. Treats all
   // sparse array-likes as if they were dense.
+  // 集合 值的遍历
   _.each = _.forEach = function(obj, iteratee, context) {
     iteratee = optimizeCb(iteratee, context);
     var i, length;
@@ -198,6 +224,7 @@
   };
 
   // Return the results of applying the iteratee to each element.
+  // ES5 map方法，不过他能处理对象
   _.map = _.collect = function(obj, iteratee, context) {
     iteratee = cb(iteratee, context);
     var keys = !isArrayLike(obj) && _.keys(obj),
@@ -211,6 +238,7 @@
   };
 
   // Create a reducing function iterating left or right.
+  // reduce  reduceRight
   var createReduce = function(dir) {
     // Wrap code that reassigns argument variables in a separate function than
     // the one that accesses `arguments.length` to avoid a perf hit. (#1991)
@@ -482,6 +510,7 @@
   };
 
   // Return the number of elements in an object.
+  // 返回对象上元素的数目 不包含原型链上的属性
   _.size = function(obj) {
     if (obj == null) return 0;
     return isArrayLike(obj) ? obj.length : _.keys(obj).length;
@@ -493,7 +522,7 @@
     result[pass ? 0 : 1].push(value);
   }, true);
 
-  // Array Functions
+  // Array Functions 数组方法
   // ---------------
 
   // Get the first element of an array. Passing **n** will return the first N
@@ -648,7 +677,7 @@
   _.object = function(list, values) {
     var result = {};
     for (var i = 0, length = getLength(list); i < length; i++) {
-      if (values) {
+      if (values) { 
         result[list[i]] = values[i];
       } else {
         result[list[i][0]] = list[i][1];
@@ -753,6 +782,7 @@
     }
     return result;
   };
+  // 以上都是数组方法的具体实现
 
   // Function (ahem) Functions
   // ------------------
